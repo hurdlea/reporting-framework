@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 12/6/19, 11:07 am.
-#  Last modified 11/6/19, 3:37 pm
+#  Developed by Alan Hurdle on 12/6/19, 9:33 pm.
+#  Last modified 12/6/19, 9:29 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from enum import Enum, IntFlag, IntEnum
@@ -7,6 +7,8 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from collections import OrderedDict
 from analytics_symbols import *
+from typing import List, Dict
+from amazon.ion import simple_types
 
 
 class SearchTypeType(Enum):
@@ -160,7 +162,119 @@ class PageActivityType:
 			return 'navigation'
 
 
-@dataclass
+property_list = {
+	EVENT_ID: 'event_id', TIMESTAMP: 'timestamp', APP_SESSION_ID: 'app_session',
+	USAGE_SESSION_ID: 'usage_session', PAGE_SESSION_ID: 'page_session',
+	CONTEXT_EVENT_ID: 'device_context_id'
+}
+
+# Default values for the Identity Header
+DOCUMENT_VERSION_VALUE = '1.0.0'
+LIBRARY_NAME_VALUE = 'analytic-arris'
+LIBRARY_VERSION_VALUE = '0.1.0'
+GIZMO_TYPE_VALUE = 'STB'
+GIZMO_NAME_VALUE = 'PACE-iQ3'
+
+
+@dataclass()
+class IdentityHeader:
+	timestamp: datetime
+	hw_version: str
+	hw_id: bytes
+	hw_client_id: str
+	hw_card_id: str
+	ams_id: bytes
+	ams_panel: int
+	app_version: str
+
+	def pack_header(self) -> OrderedDict:
+		header = OrderedDict()
+		header[DOC_VERSION] = DOCUMENT_VERSION_VALUE
+		header[TIMESTAMP] = self.timestamp
+		header[LIBRARY_NAME] = LIBRARY_NAME_VALUE
+		header[LIBRARY_VERSION] = LIBRARY_VERSION_VALUE
+		header[DEVICE_TYPE] = GIZMO_TYPE_VALUE
+		header[DEVICE_NAME] = GIZMO_NAME_VALUE
+		header[DEVICE_VARIANT] = self.hw_version
+		header[DEVICE_HW_ID] = self.hw_id
+		header[DEVICE_CDSN] = self.hw_client_id
+		header[DEVICE_CA_CARD] = self.hw_card_id
+		header[CUSTOMER_AMS_ID] = self.ams_id
+		header[CUSTOMER_AMS_PANEL] = self.ams_panel
+		header[SOFTWARE_VERSION] = self.app_version
+		header[EVENT_LIST] = List[EventHeader]
+
+		return header
+
+	def unpack_header(self, properties: OrderedDict):
+		raise NotImplementedError("Not implemented yet!")
+
+
+class EventFactory:
+	classes = {}
+	content_classes = {}
+	selector_classes = {}
+
+	def __init__(self):
+		self.classes[EventHeader.ERROR_MESSAGE_EVENT] = ErrorMessageEvent
+		self.classes[EventHeader.END_OF_FILE_EVENT] = EndOfFileEvent
+		self.classes[EventHeader.POWER_STATE_EVENT] = PowerStatusEvent
+		self.classes[EventHeader.REBOOT_REQUEST_EVENT] = RebootEvent
+		self.classes[EventHeader.CODE_DOWNLOAD_EVENT] = CodeDownloadEvent
+		self.classes[EventHeader.APPLICATION_LAUNCH_EVENT] = ApplicationConfigEvent
+		self.classes[EventHeader.LIVE_PLAY_EVENT] = LivePlayEvent
+		self.classes[EventHeader.RECORDING_EVENT] = RecordingEvent
+		self.classes[EventHeader.PLAYBACK_EVENT] = PlaybackEvent
+		self.classes[EventHeader.VIEWING_STOP_EVENT] = ViewingStopEvent
+		self.classes[EventHeader.VIDEO_OUTPUT_EVENT] = VideoOutputEvent
+		self.classes[EventHeader.PAGE_VIEW_EVENT] = PageViewEvent
+		self.classes[EventHeader.SELECTOR_EVENT] = SelectorFactory
+		self.classes[EventHeader.CONTENT_ACTION_EVENT] = ContentActionFactory
+		self.classes[EventHeader.SEARCH_QUERY_EVENT] = SearchQueryEvent
+		self.classes[EventHeader.DEVICE_CONTEXT_EVENT] = DeviceContextEvent
+		self.classes[EventHeader.FEATURE_USAGE_CONTEXT_EVENT] = ApplicationConfigEvent
+
+		self.content_classes[ContentActionType.BOOK_ACTION] = BookContentActionEvent
+		self.content_classes[ContentActionType.WATCH_ACTION] = BookContentActionEvent
+		self.content_classes[ContentActionType.DOWNLOAD_ACTION] = BookContentActionEvent
+		self.content_classes[ContentActionType.DELETE_ACTION] = BookContentActionEvent
+		self.content_classes[ContentActionType.KEEP_ACTION] = BookContentActionEvent
+		self.content_classes[ContentActionType.UPGRADE_ACTION] = BookContentActionEvent
+		self.content_classes[ContentActionType.RENT_ACTION] = BookContentActionEvent
+		self.content_classes[ContentActionType.NEXT_EPISODE_ACTION] = BookContentActionEvent
+		self.content_classes[ContentActionType.JUMP_ACTION] = BookContentActionEvent
+
+	def factory(self, event_type: int, properties):
+		print(self.classes[event_type])
+		if event_type == EventHeader.SELECTOR_EVENT:
+			if CONTENT_PROGRAM_ID in properties:
+				return SelectorContentEvent.unpack_event(properties)
+			elif COLLECTION_SOURCE in properties:
+				return SelectorCollectionEvent.unpack_event(properties)
+			else:
+				raise RuntimeError('Missing required key in Selector Event' + str(properties))
+		elif event_type == EventHeader.CONTENT_ACTION_EVENT:
+			action = properties[EVENT_ACTION]
+			return self.content_classes[action].unpack_event(properties)
+		else:
+			return self.classes[event_type].unpack_event(properties)
+
+
+class SelectorFactory:
+	@staticmethod
+	def unpack_event(event):
+		pass
+
+
+class ContentActionFactory:
+	@staticmethod
+	def unpack_event(properties):
+		action = properties[EVENT_ACTION]
+		if action == ContentActionType.BOOK_ACTION: return BookContentActionEvent
+		pass
+
+
+@dataclass()
 class EventHeader:
 	timestamp: datetime
 	event_id: int = field(init=False, default=None)
@@ -204,12 +318,17 @@ class EventHeader:
 		event[CONTEXT_EVENT_ID] = self.device_context_id
 		return event
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	def _set_header_from_event(self, properties):
+		self.event_id = properties[EVENT_ID]
+		self.app_session = properties[APP_SESSION_ID]
+		self.usage_session = properties[USAGE_SESSION_ID]
+		self.page_session = properties[PAGE_SESSION_ID]
+		self.device_context_id = properties[CONTEXT_EVENT_ID]
 
 
-@dataclass
+@dataclass()
 class ErrorMessageEvent(EventHeader):
+	page: str
 	error_num_message: str
 	technical_message: str = None
 
@@ -224,11 +343,19 @@ class ErrorMessageEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = ErrorMessageEvent(
+			properties[TIMESTAMP],
+			properties[PAGE_NAME],
+			properties[ERROR_FNUM_MESSAGE],
+			technical_message=properties[ERROR_TECHNICAL_MESSAGE]
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class EndOfFileEvent(EventHeader):
 
 	def __post_init__(self):
@@ -238,11 +365,16 @@ class EndOfFileEvent(EventHeader):
 		properties = super().pack_event()
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = EndOfFileEvent(
+			properties[TIMESTAMP]
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class PowerStatusEvent(EventHeader):
 	power_status: PowerStateType
 
@@ -255,11 +387,14 @@ class PowerStatusEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = PowerStatusEvent(properties[TIMESTAMP], properties[DEVICE_POWER_STATUS])
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class RebootEvent(EventHeader):
 	reboot_type: RebootTypeType
 
@@ -268,15 +403,21 @@ class RebootEvent(EventHeader):
 
 	def pack_event(self) -> OrderedDict:
 		properties = super().pack_event()
-		properties[PVR_HDD_SIZE] = self.reboot_type.value
+		properties[REBOOT_TYPE] = self.reboot_type.value
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = RebootEvent(
+			properties[TIMESTAMP],
+			properties[REBOOT_TYPE]
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class CodeDownloadEvent(EventHeader):
 	software_version: str
 	epg_version: str = None
@@ -292,11 +433,18 @@ class CodeDownloadEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = CodeDownloadEvent(
+			properties[TIMESTAMP],
+			properties[SOFTWARE_VERSION],
+			properties[EPG_VERSION] if EPG_VERSION in properties else None
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class ApplicationLaunchEvent(EventHeader):
 	content_provider: str
 	app_name: str
@@ -315,11 +463,20 @@ class ApplicationLaunchEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = ApplicationLaunchEvent(
+			properties[TIMESTAMP],
+			properties[CONTENT_PROVIDER],
+			properties[APP_NAME],
+			properties[APP_PROVIDER],
+			properties[APP_STATE]
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class LivePlayEvent(EventHeader):
 	viewing_start: datetime
 	content_provider: str
@@ -358,11 +515,30 @@ class LivePlayEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = LivePlayEvent(
+			properties[TIMESTAMP],
+			properties[PLAYER_VIEWING_START_TIMESTAMP],
+			properties[CONTENT_PROVIDER],
+			properties[CONTENT_PROGRAM_ID],
+			properties[CONTENT_SCHEDULE_ID],
+			properties[CONTENT_START_TIMESTAMP],
+			properties[CONTENT_DURATION],
+			properties[CONTENT_PROGRAM_TITLE],
+			properties[CONTENT_CLASSIFICATION],
+			properties[CONTENT_RESOLUTION],
+			ContentTypeType(properties[CONTENT_TYPE]),
+			ViewStatusType(properties[PLAYER_VIEW_STATUS]),
+			selector_track_id=properties[SELECTOR_TRACK_ID],
+		)
+		if CONTENT_EPISODE_TITLE in properties:
+			obj.program_episode_title = properties[CONTENT_EPISODE_TITLE]
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class RecordingEvent(EventHeader):
 	content_provider: str
 	program_id: str
@@ -407,11 +583,32 @@ class RecordingEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = RecordingEvent(
+			properties[TIMESTAMP],
+			properties[CONTENT_PROVIDER],
+			properties[CONTENT_PROGRAM_ID],
+			properties[CONTENT_SCHEDULE_ID],
+			properties[CONTENT_START_TIMESTAMP],
+			properties[CONTENT_DURATION],
+			properties[CONTENT_PROGRAM_TITLE],
+			properties[CONTENT_CLASSIFICATION],
+			properties[CONTENT_RESOLUTION],
+			ContentTypeType(properties[CONTENT_TYPE]),
+			BookingType(properties[MEDIA_BOOKING_SOURCE]),
+			EventSourceType(properties[MEDIA_EVENT_SOURCE]),
+			properties[MEDIA_REC_START_TIMESTAMP],
+			properties[MEDIA_DURATION],
+			RecordingStatusType(properties[MEDIA_REC_STATUS]),
+			properties[MEDIA_EXPIRY_TIMESTAMP],
+			program_episode_title=properties[CONTENT_EPISODE_TITLE] if CONTENT_EPISODE_TITLE in properties else None,
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class PlaybackEvent(EventHeader):
 	viewing_start: datetime
 	content_provider: str
@@ -462,11 +659,35 @@ class PlaybackEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = PlaybackEvent(
+			properties[TIMESTAMP],
+			properties[PLAYER_VIEWING_START_TIMESTAMP],
+			properties[CONTENT_PROVIDER],
+			properties[CONTENT_PROGRAM_ID],
+			properties[CONTENT_SCHEDULE_ID],
+			properties[CONTENT_START_TIMESTAMP],
+			properties[CONTENT_DURATION],
+			properties[CONTENT_PROGRAM_TITLE],
+			properties[CONTENT_CLASSIFICATION],
+			properties[CONTENT_RESOLUTION],
+			ContentTypeType(properties[CONTENT_TYPE]),
+			ViewStatusType(properties[PLAYER_VIEW_STATUS]),
+			BookingType(properties[MEDIA_BOOKING_SOURCE]),
+			EventSourceType(properties[MEDIA_EVENT_SOURCE]),
+			properties[MEDIA_REC_START_TIMESTAMP],
+			properties[MEDIA_DURATION],
+			properties[PLAYER_MEDIA_OFFSET],
+			properties[PLAYER_TRICKMODE_SPEED],
+			program_episode_title=properties[CONTENT_EPISODE_TITLE] if CONTENT_EPISODE_TITLE in properties else None,
+			selector_track_id = properties[SELECTOR_TRACK_ID],
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class ViewingStopEvent(EventHeader):
 	viewing_start: datetime
 	content_provider: str
@@ -533,11 +754,35 @@ class ViewingStopEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = ViewingStopEvent(
+			properties[TIMESTAMP],
+			properties[PLAYER_VIEWING_START_TIMESTAMP],
+			properties[CONTENT_PROVIDER],
+			properties[CONTENT_PROGRAM_ID],
+			properties[CONTENT_SCHEDULE_ID],
+			properties[CONTENT_START_TIMESTAMP],
+			properties[CONTENT_DURATION],
+			properties[CONTENT_PROGRAM_TITLE],
+			properties[CONTENT_CLASSIFICATION],
+			properties[CONTENT_RESOLUTION],
+			ContentTypeType(properties[CONTENT_TYPE]),
+			ViewStatusType(properties[PLAYER_VIEW_STATUS]),
+			properties[PLAYER_MEDIA_OFFSET],
+			properties[PLAYER_VIEWED_DURATION],
+			booking_source=BookingType(properties[MEDIA_BOOKING_SOURCE]) if not isinstance(properties[MEDIA_BOOKING_SOURCE], simple_types.IonPyNull) else None,
+			event_source=EventSourceType(properties[MEDIA_EVENT_SOURCE]) if not isinstance(properties[MEDIA_EVENT_SOURCE], simple_types.IonPyNull) else None,
+			record_timestamp=properties[MEDIA_REC_START_TIMESTAMP],
+			record_duration=properties[MEDIA_DURATION],
+			program_episode_title=properties[CONTENT_EPISODE_TITLE] if CONTENT_EPISODE_TITLE in properties else None,
+			selector_track_id = properties[SELECTOR_TRACK_ID],
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class VideoOutputEvent(EventHeader):
 	display_on: bool
 	detected_HDR: str = None
@@ -566,13 +811,27 @@ class VideoOutputEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = VideoOutputEvent(
+			properties[TIMESTAMP],
+			properties[DISPLAY_ON],
+			detected_HDR=properties[DISPLAY_DETECTED_HDR] if DISPLAY_DETECTED_HDR in properties else None,
+			negotiated_HDMI=properties[DISPLAY_NEG_HDMI] if DISPLAY_NEG_HDMI in properties else None,
+			negotiated_HDCP=properties[DISPLAY_NEG_HDCP] if DISPLAY_NEG_HDCP in properties else None,
+			negotiated_resolution=properties[DISPLAY_NEG_RESOLUTION] if DISPLAY_NEG_RESOLUTION in properties else None,
+			negotiated_framerate=properties[DISPLAY_NEG_FRAMERATE] if DISPLAY_NEG_FRAMERATE in properties else None,
+			edid_hash=properties[DISPLAY_EDID_SIG] if DISPLAY_EDID_SIG in properties else None,
+			edid_block=properties[DISPLAY_EDID_BLOCK] if DISPLAY_EDID_BLOCK in properties else None
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class PageViewEvent(EventHeader):
 	name: str
+	previous: str = None
 	filter: str = None
 	sort: str = None
 
@@ -582,7 +841,7 @@ class PageViewEvent(EventHeader):
 	def pack_event(self) -> OrderedDict:
 		properties = super().pack_event()
 		properties[PAGE_NAME] = self.name
-		properties[PREVIOUS_PAGE] = None
+		properties[PREVIOUS_PAGE] = self.previous
 		if self.filter is not None:
 			properties[PAGE_FILTER] = self.filter
 		if self.sort is not None:
@@ -590,15 +849,25 @@ class PageViewEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = PageViewEvent(
+			properties[TIMESTAMP],
+			properties[PAGE_NAME],
+			previous=properties[PREVIOUS_PAGE],
+			filter=properties[PAGE_FILTER] if PAGE_FILTER in properties else None,
+			sort=properties[PAGE_SORT] if PAGE_SORT in properties else None,
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 	def page_activity(self) -> str:
 		return PageActivityType.get_activity(self.name)
 
 
-@dataclass
+@dataclass()
 class SelectorContentEvent(EventHeader):
+	page: str
 	type: str
 	title: str
 	row: str
@@ -619,6 +888,8 @@ class SelectorContentEvent(EventHeader):
 		properties[SELECTOR_TYPE] = self.type
 		properties[SELECTOR_TITLE] = self.title
 		properties[SELECTOR_ROW] = self.row
+		properties[SELECTOR_COLUMN] = self.column
+		properties[CONTENT_PROVIDER] = self.content_provider
 		properties[CONTENT_PROGRAM_ID] = self.program_id
 		properties[CONTENT_PROGRAM_TITLE] = self.program_title
 		properties[CONTENT_BRAND] = self.program_brand
@@ -627,12 +898,29 @@ class SelectorContentEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = SelectorContentEvent(
+			properties[TIMESTAMP],
+			properties[PAGE_NAME],
+			properties[SELECTOR_TYPE],
+			properties[SELECTOR_TITLE],
+			properties[SELECTOR_ROW],
+			properties[SELECTOR_COLUMN],
+			properties[CONTENT_PROVIDER],
+			properties[CONTENT_PROGRAM_ID],
+			properties[CONTENT_PROGRAM_TITLE],
+			properties[CONTENT_BRAND],
+			properties[TILE_LOCKED],
+			properties[SELECTOR_TRACK_ID]
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class SelectorCollectionEvent(EventHeader):
+	page: str
 	type: str
 	title: str
 	row: str
@@ -655,11 +943,23 @@ class SelectorCollectionEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = SelectorCollectionEvent(
+			properties[TIMESTAMP],
+			properties[PAGE_NAME],
+			properties[SELECTOR_TYPE],
+			properties[SELECTOR_TITLE],
+			properties[SELECTOR_ROW],
+			properties[SELECTOR_COLUMN],
+			properties[COLLECTION_TITLE],
+			properties[COLLECTION_SOURCE]
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class BookContentActionEvent(EventHeader):
 	user_initiated: bool
 	content_provider: str
@@ -702,11 +1002,23 @@ class BookContentActionEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = SelectorCollectionEvent(
+			properties[TIMESTAMP],
+			properties[EVENT_USER_INITIATED],
+			properties[CONTENT_PROVIDER],
+			properties[CONTENT_PROGRAM_ID],
+			properties[SELECTOR_ROW],
+			properties[SELECTOR_COLUMN],
+			properties[COLLECTION_TITLE],
+			properties[COLLECTION_SOURCE]
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class WatchContentActionEvent(EventHeader):
 	program_id: str
 	program_title: str
@@ -729,7 +1041,7 @@ class WatchContentActionEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class DownloadContentActionEvent(EventHeader):
 	user_initiated: bool
 	content_provider: str
@@ -764,7 +1076,7 @@ class DownloadContentActionEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class DeleteContentActionEvent(EventHeader):
 	user_initiated: bool
 	content_provider: str
@@ -819,7 +1131,7 @@ class DeleteContentActionEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class KeepContentActionEvent(EventHeader):
 	content_provider: str
 	program_id: str
@@ -860,7 +1172,7 @@ class KeepContentActionEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class UpgradeContentActionEvent(EventHeader):
 	content_provider: str
 	program_id: str
@@ -891,7 +1203,7 @@ class UpgradeContentActionEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class RentContentActionEvent(EventHeader):
 	program_id: str
 	program_title: str
@@ -918,7 +1230,7 @@ class RentContentActionEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class NextEpContentActionEvent(EventHeader):
 	user_initiated: bool
 	content_provider: str
@@ -957,7 +1269,7 @@ class NextEpContentActionEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class JumpContentActionEvent(EventHeader):
 	jump_type: JumpType
 
@@ -976,7 +1288,7 @@ class JumpContentActionEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class SearchQueryEvent(EventHeader):
 	initiator_type: SearchTypeType
 	query_term: str
@@ -998,7 +1310,7 @@ class SearchQueryEvent(EventHeader):
 		raise NotImplementedError("Not implemented yet!")
 
 
-@dataclass
+@dataclass()
 class DeviceContextEvent(EventHeader):
 	hw_version: str
 	os_version: str
@@ -1061,11 +1373,42 @@ class DeviceContextEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = DeviceContextEvent(
+			properties[TIMESTAMP],
+			properties[HARDWARE_VERSION],
+			properties[OS_VERSION],
+			properties[DEVICE_TEMP],
+			properties[DEVICE_RESETS],
+			properties[DEVICE_UPTIME],
+			properties[PVR_HDD_SIZE],
+			properties[PVR_CUST_FREE_PERC],
+			properties[PVR_PVOD_FREE_PERC],
+			properties[PVR_NUM_RECORDINGS],
+			properties[DISPLAY_CONNECTION],
+			properties[DISPLAY_NAME],
+			properties[DISPLAY_MANUFACTURER],
+			properties[DISPLAY_BUILD_DATE],
+			properties[DISPLAY_OPTIMAL_RES],
+			properties[DISPLAY_HDR_SUPPORT],
+			properties[TUNER_BER],
+			properties[TUNER_CNR],
+			properties[TUNER_SIGNAL_LEVEL],
+			properties[NETWORK_TYPE],
+			properties[RCU_VERSION],
+			properties[RCU_KEYS_PRESSED],
+			properties[UI_VERSION],
+			properties[EPG_VERSION],
+			properties[EPG_VERSION_INSTALL_DATE],
+			properties[LOCATION_FLAG_SET],
+			properties[APPLICATION_FLAG_SET]
+		)
+		obj._set_header_from_event(properties)
+		return obj
 
 
-@dataclass
+@dataclass()
 class ApplicationConfigEvent(EventHeader):
 	pin_classification: str
 	pin_info: str
@@ -1112,5 +1455,28 @@ class ApplicationConfigEvent(EventHeader):
 
 		return properties
 
-	def unpack_event(self, properties: OrderedDict):
-		raise NotImplementedError("Not implemented yet!")
+	@staticmethod
+	def unpack_event(properties):
+		obj = DeviceContextEvent(
+			properties[TIMESTAMP],
+			properties[CONF_PIN_CLASSIFICATION],
+			properties[CONF_PIN_INFO],
+			properties[CONF_PIN_NC],
+			properties[CONF_CHANNEL_BLOCKING_ON],
+			properties[CONF_PIN_ON_PURCHASE],
+			properties[CONF_PIN_PROTECT_KEEP],
+			properties[CONF_PIN_IP_VIDEO],
+			properties[CONF_PIN_APP_LAUNCH],
+			properties[CONF_NUM_SCHED_REMINDERS],
+			properties[CONF_NUM_SCHED_RECORDINGS],
+			properties[CONF_NUM_TEAM_LINKS],
+			properties[CONF_FAVOURITES_SETUP],
+			properties[CONF_DTT_SETUP],
+			properties[CONF_ENERGY_SAVING_ON],
+			properties[CONF_SPDIF_AUDIO_MODE],
+			properties[CONF_HDMI_AUDIO_MODE],
+			properties[CONF_DOWNLOAD_HD],
+			properties[CONF_STREAM_FROM_STORE]
+		)
+		obj._set_header_from_event(properties)
+		return obj
