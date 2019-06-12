@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 11/6/19, 9:52 am.
-#  Last modified 4/6/19, 5:52 pm
+#  Developed by Alan Hurdle on 12/6/19, 11:07 am.
+#  Last modified 12/6/19, 8:53 am
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 from reporting_events import *
 from datetime import datetime, timedelta
@@ -10,7 +10,8 @@ from amazon.ion import simpleion, symbols
 import os.path
 import analytics_symbols
 import hashlib
-from typing import List
+from typing import List, Union
+
 
 DOCUMENT_VERSION_VALUE = '1.0.0'
 LIBRARY_NAME_VALUE = 'analytic-arris'
@@ -29,12 +30,12 @@ class LogManager(Thread):
 		self._events: List[OrderedDict] = []
 		self._batches: List[str] = []
 		self._hw_client_id = None
-		self._application_session: datetime = None
-		self._usage_session: datetime = None
-		self._page_session: datetime = None
-		self._last_page: str = None
-		self._device_context: OrderedDict = None
-		self._device_context_id: datetime = None
+		self._application_session: Union[datetime, None] = None
+		self._usage_session: Union[datetime, None] = None
+		self._page_session: Union[datetime, None] = None
+		self._last_page: str = Union[str, None]
+		self._device_context: Union[OrderedDict, None] = None
+		self._device_context_id: Union[datetime, None] = None
 		self._last_activity_state = None
 		self._ion_symbols = symbols.SymbolTable(
 			symbols.SHARED_TABLE_TYPE,
@@ -50,7 +51,7 @@ class LogManager(Thread):
 	def clear_state(self, timestamp: datetime):
 		self._application_session = timestamp
 		self._usage_session = timestamp
-		self._page_session  = timestamp
+		self._page_session = timestamp
 		self._last_page = None
 		self._last_activity_state = None
 
@@ -74,15 +75,24 @@ class LogManager(Thread):
 			'batch': []
 		}
 
-	def push_event(self, event: BaseEvent):
+	# Application method to push an event into the log queue
+	def push_event(self, event: EventHeader):
 		self._event_queue.put(event)
 
+	# Convenience method to stop the dequeue thread
 	def stop(self):
-		self._event_queue.put(EventHeader(EventHeader.STOP_EVENT, datetime.utcnow()))
+		stop = EventHeader(timestamp=datetime.utcnow())
+		stop.event_id = EventHeader.STOP_EVENT
+		self._event_queue.put(stop)
 
+	# Convenience method for the testing harness to get the list of generated filenames
 	def get_batch_filenames(self) -> List[str]:
 		self.join()
 		return self._batches
+
+	# Convenience method for the testing harness
+	def flush(self):
+		self._flush()
 
 	# Flush the stored events
 	def _flush(self):
@@ -134,7 +144,7 @@ class LogManager(Thread):
 		print('Event collection thread started')
 		while True:
 			try:
-				event: BaseEvent = self._event_queue.get(block=True, timeout=2)
+				event: EventHeader = self._event_queue.get(block=True, timeout=2)
 			except Empty:
 				# Send the events if the send criteria are met
 				if len(self._events) > 0:

@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 11/6/19, 9:52 am.
-#  Last modified 11/6/19, 9:12 am
+#  Developed by Alan Hurdle on 12/6/19, 11:07 am.
+#  Last modified 12/6/19, 10:59 am
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from log_manager import LogManager
@@ -10,9 +10,17 @@ import requests
 from amazon import ion
 import six
 import random
-from typing import List
+from typing import List, Union
+import os
+import glob
+import traceback
 
 channels = ['F8D', 'SCD', 'NGD', 'BKH', 'SOD', 'STN', 'MO1', 'FDH', 'S3D', 'BE3', 'ARD', 'F4D', 'EPD', 'E1D', 'FS3']
+
+# Enable for proxy support
+PROXY_ON = False
+HTTP_PROXY_HOST = 'localhost:3128'
+HTTPS_PROXY_HOST = 'localhost:3128'
 
 
 class JSONEncoderForIonTypes(json.JSONEncoder):
@@ -60,14 +68,13 @@ def device_context(timestamp: datetime) -> DeviceContextEvent:
 		rcu_keys_pressed=bytes.fromhex('0000000000000000'),
 		ui_design_version='PHOENIX3',
 		epg_version='274_A_538953:v10R0815',
-		epg_install_timestamp=datetime(2019,5,20,0,0,0,0),
+		epg_install_timestamp=datetime(2019, 5, 20, 0, 0, 0, 0),
 		location_flag_set=bytes.fromhex('0000000000000000000000000000000000000000000000000000000000000000'),
 		app_flags_set=bytes.fromhex('0000000000000000000000000fac4000')
 	)
 	return event
 
 
-@dataclass
 class ProgrammeMetadata:
 	content_provider: str
 	program_id: str
@@ -78,6 +85,18 @@ class ProgrammeMetadata:
 	episode_title: str
 	classification: str
 	resolution: str
+
+	def __init__(self, content_provider: str, program_id: str, schedule_id: str, start_time: datetime,
+				duration: timedelta, program_title: str, episode_title: str, classification: str, resolution: str):
+		self.content_provider = content_provider
+		self.program_id = program_id
+		self.schedule_id = schedule_id
+		self.start_time = start_time
+		self.duration = duration
+		self.program_title = program_title
+		self.episode_title = episode_title
+		self.classification = classification
+		self.resolution = resolution
 
 	@classmethod
 	def _get_programme(cls, root: dict):
@@ -91,13 +110,13 @@ class ProgrammeMetadata:
 			content_provider=schedule['channelTag'],
 			program_id=item['programId'],
 			schedule_id=schedule['id'],
-			start_time=datetime.utcfromtimestamp(schedule['startTime']/1000),
-			duration=datetime.utcfromtimestamp(schedule['endTime']/1000) - datetime.utcfromtimestamp(schedule['startTime']/1000),
+			start_time=datetime.utcfromtimestamp(schedule['startTime'] / 1000),
+			duration=datetime.utcfromtimestamp(schedule['endTime'] / 1000) - datetime.utcfromtimestamp(
+				schedule['startTime']/1000),
 			program_title=item['programEventTitle'],
 			episode_title=item['episodeTitle'] if 'episodeTitle' in item else None,
 			classification=schedule['classification'],
-			resolution=schedule['videoQuality']
-		)
+			resolution=schedule['videoQuality'])
 
 	@classmethod
 	def convert(cls, values: dict):
@@ -106,8 +125,8 @@ class ProgrammeMetadata:
 		return metadata
 
 	@classmethod
-	def get_schedule(cls, channel: str, values: dict) -> list:
-		events: list[ProgrammeMetadata] = []
+	def get_schedule(cls, channel: str, values: dict):
+		events: List[ProgrammeMetadata] = []
 		root = values['hits']
 		for event in root:
 			for schedule in event['relevantSchedules']:
@@ -131,8 +150,9 @@ class Media:
 	create_timestamp: datetime
 	duration: timedelta
 
-	def __init__(self, content_type: ContentTypeType, view_status: ViewStatusType, booking_source: BookingType,
-					event_source: EventSourceType, create_timestamp:datetime, duration: timedelta):
+	def __init__(self, content_type: ContentTypeType, view_status: ViewStatusType,
+				booking_source: Union[None, BookingType], event_source: Union[None, EventSourceType],
+				create_timestamp: datetime, duration: timedelta):
 		self.content_type = content_type
 		self.view_status = view_status
 		self.booking_source = booking_source
@@ -142,18 +162,24 @@ class Media:
 
 
 def request_channel_events(channel: str) -> List[ProgrammeMetadata]:
-	business_rule = "rid=LIVE_TODAY&fxid=02f0935e4cd5920aa6c7c996a5ee53a70fd41d8cd98f00b204e9800998ecf8427e&hwid=b552ae163e9da40d7d39bfc8ac65399d"
-	proxy_host = 'localhost:3128'
+	business_rule = "rid=LIVE_TODAY"
+	fxid = "fxid=02f0935e4cd5920aa6c7c996a5ee53a70fd41d8cd98f00b204e9800998ecf8427e"
+	hwid = "hwid=b552ae163e9da40d7d39bfc8ac65399d"
 	host = "http://foxtel-staging-admin-0.digitalsmiths.net/sd/foxtel/"
 	tap = "taps/sources/linear"
 	fields = "__fl=metadata.programEventTitle,metadata.episodeTitle,relevantSchedules.videoQuality,metadata.programId,\
 metadata.publishDuration,metadata.title,relevantSchedules.channelTag,relevantSchedules.startTime,\
 relevantSchedules.endTime,relevantSchedules.classification,relevantSchedules.id,relevantSchedules.type"
 	filter_query = "__fq=relevantSchedules.channelTag:{0}".format(channel)
-	url = host + tap + '?' + business_rule + '&' + filter_query + '&' + fields + '&limit=25'
-	response = requests.get(url, proxies={'http': proxy_host, 'https': proxy_host})
-	# response = requests.get(url)
-	return sorted(ProgrammeMetadata.get_schedule(channel, json.loads(response.text)), key=lambda prog: prog.start_time)
+	url = host + tap + '?' + '&'.join([business_rule, filter_query, fields, fxid, hwid, 'limit=100'])
+	if PROXY_ON:
+		response = requests.get(url, proxies={'http': HTTP_PROXY_HOST, 'https': HTTPS_PROXY_HOST})
+	else:
+		response = requests.get(url)
+
+	events = sorted(ProgrammeMetadata.get_schedule(channel, json.loads(response.text)), key=lambda prog: prog.start_time)
+
+	return events
 
 
 def request_live_event(channel: str) -> ProgrammeMetadata:
@@ -165,13 +191,14 @@ metadata.publishDuration,metadata.title,relevantSchedules.channelTag,relevantSch
 relevantSchedules.endTime,relevantSchedules.classification,relevantSchedules.id,relevantSchedules.EventId"
 	filter_query = "__fq=relevantSchedules.channelTag:"
 	url = host + tap + '?' + filter_query + channel + '&' + fields
-	response = requests.get(url, proxies={'http': proxy_host, 'https': proxy_host})
-	# response = requests.get(url)
-	print(response.text)
+	if PROXY_ON:
+		response = requests.get(url, proxies={'http': HTTP_PROXY_HOST, 'https': HTTPS_PROXY_HOST})
+	else:
+		response = requests.get(url)
 	return ProgrammeMetadata.convert(json.loads(response.text))
 
 
-def get_live_event(timestamp: datetime, active_dur: int = 0) -> ProgrammeMetadata:
+def get_live_event() -> ProgrammeMetadata:
 	event = request_live_event(random.choice(channels))
 	return event
 
@@ -185,7 +212,8 @@ def make_live_play_event(timestamp: datetime, event: ProgrammeMetadata) -> LiveP
 	)
 
 
-def make_playback_event(timestamp: datetime, viewing_start: datetime, event: ProgrammeMetadata, media: Media, offset: int, speed: int) -> PlaybackEvent:
+def make_playback_event(timestamp: datetime, viewing_start: datetime, event: ProgrammeMetadata, media: Media,
+						offset: int, speed: int) -> PlaybackEvent:
 	return PlaybackEvent(
 		timestamp=timestamp,
 		viewing_start=viewing_start,
@@ -229,7 +257,8 @@ def make_live_stop_event(timestamp: datetime, viewing_start: datetime, event: Pr
 	)
 
 
-def make_pvr_stop_event(timestamp: datetime, viewing_start: datetime, event: ProgrammeMetadata, media: Media, offset: int, viewed: int):
+def make_pvr_stop_event(timestamp: datetime, viewing_start: datetime, event: ProgrammeMetadata, media: Media,
+						offset: int, viewed: int):
 	return ViewingStopEvent(
 		timestamp=timestamp,
 		viewing_start=viewing_start,
@@ -254,11 +283,10 @@ def make_pvr_stop_event(timestamp: datetime, viewing_start: datetime, event: Pro
 
 
 def find_event_on_air(timestamp: datetime, events: List[ProgrammeMetadata]):
-	for event in events:
-		if event.start_time <= timestamp < (event.start_time + event.duration):
+	for index, event in enumerate(events):
+		if event.start_time <= timestamp < events[index+1].start_time:
 			return event
 
-	print('Whoops')
 	return events[0]
 
 
@@ -280,7 +308,10 @@ def power_states_activity(m: LogManager):
 	timestamp = datetime.utcnow()
 	m.clear_state(timestamp)
 
-	m.push_event(device_context(timestamp))
+	context = device_context(timestamp)
+	context.rcu_version = "** SCENARIO: POWER STATES **"
+	m.push_event(context)
+
 	power_on = PowerStatusEvent(timestamp, PowerStateType.POWER_ON)
 	m.push_event(power_on)
 
@@ -295,7 +326,7 @@ def power_states_activity(m: LogManager):
 	timestamp += timedelta(seconds=1)
 	viewing_start = timestamp
 	viewing_dur = 60
-	event = get_live_event(timestamp, viewing_dur)
+	event = get_live_event()
 	view_1 = make_live_play_event(timestamp, event)
 	m.push_event(view_1)
 
@@ -328,7 +359,10 @@ def power_states_activity(m: LogManager):
 def channel_surfing(m: LogManager):
 	timestamp = datetime.utcnow()
 	m.clear_state(timestamp)
-	m.push_event(device_context(timestamp))
+
+	context = device_context(timestamp)
+	context.rcu_version = "** SCENARIO: CHANNEL SURFING **"
+	m.push_event(context)
 
 	player = PageViewEvent(timestamp, 'player')
 	m.push_event(player)
@@ -365,7 +399,10 @@ def channel_surfing(m: LogManager):
 def trickmode_viewing(m: LogManager):
 	timestamp = datetime.utcnow()
 	m.clear_state(timestamp)
-	m.push_event(device_context(timestamp))
+
+	context = device_context(timestamp)
+	context.rcu_version = "** SCENARIO: TRICKMODE VIEWING **"
+	m.push_event(context)
 
 	player = PageViewEvent(timestamp, 'player')
 	m.push_event(player)
@@ -402,10 +439,12 @@ def trickmode_viewing(m: LogManager):
 
 	timestamp += pause_duration
 	media.duration += pause_duration
-	pvr_stop = make_pvr_stop_event(timestamp, viewing_start, event, media, event.duration.seconds, (event.duration - (viewing_start - event.start_time)).seconds)
+	pvr_stop = make_pvr_stop_event(timestamp, viewing_start, event, media, event.duration.seconds,
+								(event.duration - (viewing_start - event.start_time)).seconds)
 	m.push_event(pvr_stop)
 
 
+# Here we are reading back the 10n file and creating a JSON output in the same directory
 def read_data(filename: str):
 	catalog = ion.symbols.SymbolTableCatalog()
 	symbols = ion.symbols.SymbolTable(ion.symbols.SHARED_TABLE_TYPE, table, "foxtel.engagement.format", 1)
@@ -413,12 +452,28 @@ def read_data(filename: str):
 
 	with open(filename, "rb") as read_file:
 		data = ion.simpleion.load(read_file, catalog, single_value=True)
+		with open(filename + '.json', 'w', encoding='utf-8') as outfile:
+			json.dump(data, outfile, ensure_ascii=False, indent=4, cls=JSONEncoderForIonTypes)
 
-	print(json.dumps(data, indent=4, cls=JSONEncoderForIonTypes))
 
+# MAIN program start
+cwd = os.getcwd()
+dir_name = os.path.join(cwd, 'ion_files')
+try:
+	# Create ion files target Directory
+	os.mkdir(dir_name)
+except FileExistsError:
+	# remove old ion files
+	files = os.path.join(dir_name, '*.10n')
+	for file in glob.glob(files):
+		os.unlink(file)
+	# remove old json files
+	files = os.path.join(dir_name, '*.json')
+	for file in glob.glob(files):
+		os.unlink(file)
 
-manager = LogManager(max_events=100, send_period=60, path="c:/Users/hurdlea/Temp")
-# manager = LogManager(send_period=60, path="/Users/alanhurdle/tmp")
+manager = LogManager(max_events=100, send_period=60, path=dir_name)
+
 manager.set_identity(
 	hw_version='17.27.0.C',
 	hw_id=bytes.fromhex('2b9c5d351a879a25b86851adc36acea6'),
@@ -432,9 +487,9 @@ manager.set_identity(
 try:
 	manager.start()
 	power_states_activity(manager)
-	manager._flush()
+	manager.flush()
 	channel_surfing(manager)
-	manager._flush()
+	manager.flush()
 	trickmode_viewing(manager)
 	manager.stop()
 
@@ -445,5 +500,5 @@ try:
 
 except Exception as e:
 	manager.stop()
+	print(traceback.format_exc())
 	print(e.__doc__)
-	print(e.message)

@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 11/6/19, 9:52 am.
-#  Last modified 11/6/19, 9:11 am
+#  Developed by Alan Hurdle on 12/6/19, 11:07 am.
+#  Last modified 12/6/19, 8:45 am
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 DOC_VERSION = "document-version"
 TIMESTAMP = "timestamp"
@@ -16,7 +16,7 @@ CUSTOMER_AMS_ID = "sojourner-idFx"
 CUSTOMER_AMS_PANEL = "sojourner-idPanel"
 SOFTWARE_VERSION = "application-appVersionShort"
 EVENT_LIST = "batch"
-HARDWARE_VERSION = "gizmo-fwVersion" # Device Context Event
+HARDWARE_VERSION = "gizmo-fwVersion"  # Device Context Event
 OS_VERSION = "gizmo-osVersion"
 DEVICE_TEMP = "gizmo-temp"
 DEVICE_RESETS = "gizmo-pwrcycle"
