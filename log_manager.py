@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 12/6/19, 11:07 am.
-#  Last modified 12/6/19, 8:53 am
+#  Developed by Alan Hurdle on 13/6/19, 6:21 pm.
+#  Last modified 13/6/19, 2:28 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 from reporting_events import *
 from datetime import datetime, timedelta
@@ -181,7 +181,7 @@ class LogManager(Thread):
 				self._device_context = data
 				self._device_context_id = data[CONTEXT_EVENT_ID]
 
-			elif data[EVENT_ID] in [EventHeader.CONTENT_ACTION_EVENT, EventHeader.ERROR_MESSAGE_EVENT]:
+			elif PAGE_NAME in data and data[EVENT_ID] != EventHeader.PAGE_VIEW_EVENT:
 				data[PAGE_NAME] = self._last_page
 
 			data[APP_SESSION_ID] = self._application_session
@@ -189,7 +189,7 @@ class LogManager(Thread):
 			data[PAGE_SESSION_ID] = self._page_session
 
 			if data[EVENT_ID] in [EventHeader.VIEWING_STOP_EVENT, EventHeader.PLAYBACK_EVENT, EventHeader.LIVE_PLAY_EVENT,
-									EventHeader.SELECTOR_EVENT]:
+									EventHeader.CONTENT_SELECTOR_EVENT]:
 				m = hashlib.md5()
 				m.update(data[CONTENT_PROGRAM_TITLE].encode('utf-8'))
 				m.update(data[APP_SESSION_ID].isoformat().encode('utf-8'))
