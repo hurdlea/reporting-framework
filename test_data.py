@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
-#  Last modified 14/6/19, 1:16 pm
+#  Developed by Alan Hurdle on 14/6/19, 5:42 pm.
+#  Last modified 14/6/19, 5:29 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from log_manager import LogManager
@@ -470,7 +470,7 @@ except FileExistsError:
 	for file in glob.glob(files):
 		os.unlink(file)
 
-manager = LogManager(max_events=100, send_period=60, path=dir_name)
+manager = LogManager(sequence_counter=random.randint(1, 101) << 16, max_events=100, send_period=600, path=dir_name)
 
 manager.set_identity(
 	hw_version='17.27.0.C',

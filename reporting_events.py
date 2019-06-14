@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
-#  Last modified 14/6/19, 1:38 pm
+#  Developed by Alan Hurdle on 14/6/19, 5:42 pm.
+#  Last modified 14/6/19, 5:27 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from enum import Enum, IntFlag, IntEnum
@@ -186,19 +186,20 @@ DOCUMENT_VERSION_VALUE = '1.0.0'
 LIBRARY_NAME_VALUE = 'analytic-arris'
 LIBRARY_VERSION_VALUE = '0.1.0'
 GIZMO_TYPE_VALUE = 'STB'
-GIZMO_NAME_VALUE = 'PACE-iQ3'
+GIZMO_NAME_VALUE = 'DGS7000NF15'
 
 
 @dataclass()
 class IdentityHeader:
 	timestamp: datetime
+	sequence: int
 	hw_version: str
 	hw_id: bytes
+	app_version: str
 	hw_client_id: str
 	hw_card_id: str
 	ams_id: bytes
 	ams_panel: int
-	app_version: str
 
 	document_version: str = DOCUMENT_VERSION_VALUE
 	library_name: str = LIBRARY_NAME_VALUE
@@ -212,6 +213,7 @@ class IdentityHeader:
 		header = OrderedDict()
 		header[DOC_VERSION] = self.document_version
 		header[TIMESTAMP] = self.timestamp
+		header[SEQUENCE_ID] = self.sequence
 		header[LIBRARY_NAME] = self.library_version
 		header[LIBRARY_VERSION] = self.library_version
 		header[DEVICE_TYPE] = self.device_type
@@ -223,21 +225,22 @@ class IdentityHeader:
 		header[DEVICE_CA_CARD] = self.hw_card_id
 		header[CUSTOMER_AMS_ID] = self.ams_id
 		header[CUSTOMER_AMS_PANEL] = self.ams_panel
-		header[EVENT_LIST] = List[EventHeader]
+		header[EVENT_LIST] = []
 
 		return header
 
 	@staticmethod
-	def unpack_event(properties):
+	def unpack_header(properties):
 		obj = IdentityHeader(
 			properties[TIMESTAMP],
+			properties[SEQUENCE_ID],
 			properties[DEVICE_VARIANT],
 			properties[DEVICE_HW_ID],
+			properties[SOFTWARE_VERSION],
 			properties[DEVICE_CDSN],
 			properties[DEVICE_CA_CARD],
 			properties[CUSTOMER_AMS_ID],
 			properties[CUSTOMER_AMS_PANEL],
-			properties[SOFTWARE_VERSION],
 			document_version=properties[DOC_VERSION],
 			library_name=properties[LIBRARY_NAME],
 			library_version=properties[LIBRARY_VERSION],

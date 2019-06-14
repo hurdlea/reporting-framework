@@ -1,9 +1,9 @@
-#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
-#  Last modified 14/6/19, 11:58 am
+#  Developed by Alan Hurdle on 14/6/19, 5:42 pm.
+#  Last modified 14/6/19, 5:23 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 DOC_VERSION = "document-version"
 TIMESTAMP = "timestamp"
-IDENTITY = "identity"
+SEQUENCE_ID = "sequence"
 LIBRARY_NAME = "library-name"
 LIBRARY_VERSION = "library-version"
 DEVICE_TYPE = "gizmo-type"
@@ -134,7 +134,7 @@ REBOOT_TYPE = "gizmo-rebootType"
 table = [
 	DOC_VERSION,
 	TIMESTAMP,
-	IDENTITY,
+	SEQUENCE_ID,
 	LIBRARY_NAME,
 	LIBRARY_VERSION,
 	DEVICE_TYPE,
@@ -149,7 +149,7 @@ table = [
 	EVENT_LIST,
 	HARDWARE_VERSION,  # Device Context Event
 	OS_VERSION,
-	DEVICE_TEMP,
+	DEVICE_MODEL_ID,
 	DEVICE_RESETS,
 	DEVICE_UPTIME,
 	PVR_CUST_FREE_PERC,
@@ -161,17 +161,16 @@ table = [
 	DISPLAY_BUILD_DATE,
 	DISPLAY_OPTIMAL_RES,
 	DISPLAY_HDR_SUPPORT,
-	TUNER_BER,
-	TUNER_CNR,
-	TUNER_SIGNAL_LEVEL,
+	APP_POSTCODE,
+	APP_DTT_REGION,
+	APP_REGION_ID,
 	NETWORK_TYPE,
 	RCU_VERSION,
 	RCU_KEYS_PRESSED,
 	UI_VERSION,
 	EPG_VERSION,
 	EPG_VERSION_INSTALL_DATE,
-	LOCATION_FLAG_SET,
-	APPLICATION_FLAG_SET,
+	RCU_TYPE,
 	EVENT_ID,  # Event header
 	APP_SESSION_ID,
 	USAGE_SESSION_ID,

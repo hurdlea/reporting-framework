@@ -1,11 +1,10 @@
-#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
-#  Last modified 14/6/19, 11:24 am
+#  Developed by Alan Hurdle on 14/6/19, 5:42 pm.
+#  Last modified 14/6/19, 5:40 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 from reporting_events import *
 from datetime import datetime, timedelta
 from threading import Thread
 from queue import Queue, Empty
-import copy
 from amazon.ion import simpleion, symbols
 import os.path
 import analytics_symbols
@@ -13,20 +12,14 @@ import hashlib
 from typing import List, Union
 
 
-DOCUMENT_VERSION_VALUE = '1.0.0'
-LIBRARY_NAME_VALUE = 'analytic-arris'
-LIBRARY_VERSION_VALUE = '0.1.0'
-GIZMO_TYPE_VALUE = 'STB'
-GIZMO_NAME_VALUE = 'DGS7000NF15'
-
-
 class LogManager(Thread):
-	def __init__(self, send_period: int = 3600, max_events: int = 20, path: str = './'):
+	def __init__(self, sequence_counter: int, send_period: int = 3600, max_events: int = 20, path: str = './'):
+		self._sequence_counter = sequence_counter
 		self._send_period = send_period
 		self._max_events = max_events
 		self._path = path
 		self._flush_time = datetime.utcnow() + timedelta(seconds=send_period)
-		self._header = {}
+		self._header = None
 		self._events: List[OrderedDict] = []
 		self._batches: List[str] = []
 		self._hw_client_id = None
@@ -58,22 +51,17 @@ class LogManager(Thread):
 	def set_identity(self, hw_version: str, hw_id: bytes, app_version: str, hw_client_id: str,
 						hw_card_id: str, ams_id: bytes, ams_panel: int):
 		self._hw_client_id = hw_client_id
-		self._header = {
-			DOC_VERSION: DOCUMENT_VERSION_VALUE,
-			TIMESTAMP: datetime.utcnow(),
-			LIBRARY_NAME: LIBRARY_NAME_VALUE,
-			LIBRARY_VERSION: LIBRARY_VERSION_VALUE,
-			DEVICE_TYPE: GIZMO_TYPE_VALUE,
-			DEVICE_NAME: GIZMO_NAME_VALUE,
-			DEVICE_VARIANT: hw_version,
-			DEVICE_HW_ID: hw_id,
-			DEVICE_CDSN: hw_client_id,
-			DEVICE_CA_CARD: hw_card_id,
-			CUSTOMER_AMS_ID: ams_id,
-			CUSTOMER_AMS_PANEL: ams_panel,
-			SOFTWARE_VERSION: app_version,
-			'batch': []
-		}
+		self._header = IdentityHeader(
+			datetime.utcnow(),
+			0,
+			hw_version,
+			hw_id,
+			app_version,
+			hw_client_id,
+			hw_card_id,
+			ams_id,
+			ams_panel
+		)
 
 	# Application method to push an event into the log queue
 	def push_event(self, event: EventHeader):
@@ -98,8 +86,10 @@ class LogManager(Thread):
 	def _flush(self):
 		if len(self._events) > 0:
 			print("Flushing stored events")
-			header = copy.deepcopy(self._header)
-			batch = header['batch']
+			self._header.sequence = self._sequence_counter
+			self._sequence_counter += 1
+			header = self._header.pack_header()
+			batch = header[EVENT_LIST]
 
 			# Prepend a device context event to every batch and fudge the values
 			# so that it appears as part of this batch.
@@ -148,8 +138,8 @@ class LogManager(Thread):
 			except Empty:
 				# Send the events if the send criteria are met
 				if len(self._events) > 0:
-					print(len(self._events), self._max_events, datetime.utcnow(), self._flush_time)
 					if len(self._events) >= self._max_events or datetime.utcnow() >= self._flush_time:
+						print("Flushing automatically:", len(self._events), self._max_events, datetime.utcnow(), self._flush_time)
 						self._flush()
 				continue
 

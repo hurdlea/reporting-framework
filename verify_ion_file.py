@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
-#  Last modified 14/6/19, 1:49 pm
+#  Developed by Alan Hurdle on 14/6/19, 5:42 pm.
+#  Last modified 14/6/19, 5:35 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from reporting_events import *
@@ -14,7 +14,7 @@ def decode_ion_event(event: EventFactory, data):
 
 def decode_ion_data(data):
 	factory = EventFactory()
-	header, events = IdentityHeader.unpack_event(data)
+	header, events = IdentityHeader.unpack_header(data)
 	for item in events:
 		# Here is the handler for each event
 		if isinstance(item, simple_types.IonPyDict):
@@ -61,6 +61,7 @@ def read_data(filename: str):
 
 if len(sys.argv) > 1:
 	start = datetime.utcnow()
-	read_data(sys.argv[1])
+	data_model = read_data(sys.argv[1])
 	end = datetime.utcnow()
+	print(data_model)
 	print('Read and ingest time:', end - start)
