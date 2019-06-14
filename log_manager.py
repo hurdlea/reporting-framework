@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 13/6/19, 6:21 pm.
-#  Last modified 13/6/19, 2:28 pm
+#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
+#  Last modified 14/6/19, 11:24 am
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 from reporting_events import *
 from datetime import datetime, timedelta
@@ -17,7 +17,7 @@ DOCUMENT_VERSION_VALUE = '1.0.0'
 LIBRARY_NAME_VALUE = 'analytic-arris'
 LIBRARY_VERSION_VALUE = '0.1.0'
 GIZMO_TYPE_VALUE = 'STB'
-GIZMO_NAME_VALUE = 'PACE-iQ3'
+GIZMO_NAME_VALUE = 'DGS7000NF15'
 
 
 class LogManager(Thread):

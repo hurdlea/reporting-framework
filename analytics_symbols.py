@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 12/6/19, 11:07 am.
-#  Last modified 12/6/19, 8:45 am
+#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
+#  Last modified 14/6/19, 11:58 am
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 DOC_VERSION = "document-version"
 TIMESTAMP = "timestamp"
@@ -18,7 +18,7 @@ SOFTWARE_VERSION = "application-appVersionShort"
 EVENT_LIST = "batch"
 HARDWARE_VERSION = "gizmo-fwVersion"  # Device Context Event
 OS_VERSION = "gizmo-osVersion"
-DEVICE_TEMP = "gizmo-temp"
+DEVICE_MODEL_ID = "gizmo-modelId"
 DEVICE_RESETS = "gizmo-pwrcycle"
 DEVICE_UPTIME = "gizmo-uptime"
 PVR_HDD_SIZE = "gizmo-storageCapacity"
@@ -31,17 +31,16 @@ DISPLAY_MANUFACTURER = "display-edidIdManufacturer"
 DISPLAY_BUILD_DATE = "display-edidBuildDate"
 DISPLAY_OPTIMAL_RES = "display-edidOptimalMaxResolution"
 DISPLAY_HDR_SUPPORT = "display-edidIdHdr"
-TUNER_BER = "connectivity-homeSignalBer"
-TUNER_CNR = "connectivity-homeSignalCnr"
-TUNER_SIGNAL_LEVEL = "connectivity-homeSignalLvl"
+APP_REGION_ID = "application-regionId"
+APP_POSTCODE = "application-postcode"
+APP_DTT_REGION = "application-dttRegion"
 NETWORK_TYPE = "connectivity-connectionType"
 RCU_VERSION = "rcu-version"
 RCU_KEYS_PRESSED = "rcu-keysPressed"
+RCU_TYPE = "rcu-type"
 UI_VERSION = "application-id"
 EPG_VERSION = "application-idSupplemental"
 EPG_VERSION_INSTALL_DATE = "application-installDate"
-LOCATION_FLAG_SET = "application-locationSet"
-APPLICATION_FLAG_SET = "application-flagSet"
 EVENT_ID = "event-idClass"  # Event header
 APP_SESSION_ID = "behavioural-idSessionApp"
 USAGE_SESSION_ID = "behavioural-idSessionUsage"

@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 13/6/19, 6:21 pm.
-#  Last modified 13/6/19, 6:11 pm
+#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
+#  Last modified 14/6/19, 1:38 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from enum import Enum, IntFlag, IntEnum
@@ -68,6 +68,16 @@ class BookingType(IntFlag):
 	SERIES_RECORDING = 0x89
 	# Team linked scheduled recording
 	TEAM_RECORDING = 0x29
+
+
+class RcuTypeType(IntFlag):
+	UNIDENTIFIED_REMOTE = 0x00
+	IR_STANDARD_REMOTE = 0x01
+	IR_VOICE_REMOTE = 0x02
+	BT_STANDARD_REMOTE = 0x04
+	BT_VOICE_REMOTE = 0x08
+	CEC_VOLUME_ENABLED = 0x20
+	LOW_BATTERY = 0x80
 
 
 class JumpType(Enum):
@@ -208,11 +218,11 @@ class IdentityHeader:
 		header[DEVICE_NAME] = self.device_name
 		header[DEVICE_VARIANT] = self.hw_version
 		header[DEVICE_HW_ID] = self.hw_id
+		header[SOFTWARE_VERSION] = self.app_version
 		header[DEVICE_CDSN] = self.hw_client_id
 		header[DEVICE_CA_CARD] = self.hw_card_id
 		header[CUSTOMER_AMS_ID] = self.ams_id
 		header[CUSTOMER_AMS_PANEL] = self.ams_panel
-		header[SOFTWARE_VERSION] = self.app_version
 		header[EVENT_LIST] = List[EventHeader]
 
 		return header
@@ -1566,7 +1576,7 @@ class SearchQueryEvent(EventHeader):
 class DeviceContextEvent(EventHeader):
 	hw_version: str
 	os_version: str
-	temperature: int
+	model_id: int
 	num_resets: int
 	uptime: int
 	pvr_hdd_size: int
@@ -1579,17 +1589,16 @@ class DeviceContextEvent(EventHeader):
 	display_build_date: str
 	display_optimal_res: str
 	display_hdr_support: str
-	tuner_ber: int
-	tuner_cnr: int
-	tuner_signal_level: int
 	network_connectivity: int
 	rcu_version: str
 	rcu_keys_pressed: bytes
+	rcu_type: RcuTypeType
+	region_id: int
+	postcode: int
+	dtt_region: int
 	ui_design_version: str
 	epg_version: str
 	epg_install_timestamp: datetime
-	location_flag_set: bytes
-	app_flags_set: bytes
 
 	@staticmethod
 	def get_event_id():
@@ -1602,7 +1611,7 @@ class DeviceContextEvent(EventHeader):
 		properties = super().pack_event()
 		properties[HARDWARE_VERSION] = self.hw_version
 		properties[OS_VERSION] = self.os_version
-		properties[DEVICE_TEMP] = self.temperature
+		properties[DEVICE_MODEL_ID] = self.model_id
 		properties[DEVICE_RESETS] = self.num_resets
 		properties[DEVICE_UPTIME] = self.uptime
 		properties[PVR_HDD_SIZE] = self.pvr_hdd_size
@@ -1615,17 +1624,16 @@ class DeviceContextEvent(EventHeader):
 		properties[DISPLAY_BUILD_DATE] = self.display_build_date
 		properties[DISPLAY_OPTIMAL_RES] = self.display_optimal_res
 		properties[DISPLAY_HDR_SUPPORT] = self.display_hdr_support
-		properties[TUNER_BER] = self.tuner_ber
-		properties[TUNER_CNR] = self.tuner_cnr
-		properties[TUNER_SIGNAL_LEVEL] = self.tuner_signal_level
 		properties[NETWORK_TYPE] = self.network_connectivity
 		properties[RCU_VERSION] = self.rcu_version
 		properties[RCU_KEYS_PRESSED] = self.rcu_keys_pressed
+		properties[RCU_TYPE] = self.rcu_type.value
+		properties[APP_REGION_ID] = self.region_id
+		properties[APP_POSTCODE] = self.postcode
+		properties[APP_DTT_REGION] = self.dtt_region
 		properties[UI_VERSION] = self.ui_design_version
 		properties[EPG_VERSION] = self.epg_version
 		properties[EPG_VERSION_INSTALL_DATE] = self.epg_install_timestamp
-		properties[LOCATION_FLAG_SET] = self.location_flag_set
-		properties[APPLICATION_FLAG_SET] = self.app_flags_set
 
 		return properties
 
@@ -1635,7 +1643,7 @@ class DeviceContextEvent(EventHeader):
 			properties[TIMESTAMP],
 			properties[HARDWARE_VERSION],
 			properties[OS_VERSION],
-			properties[DEVICE_TEMP],
+			properties[DEVICE_MODEL_ID],
 			properties[DEVICE_RESETS],
 			properties[DEVICE_UPTIME],
 			properties[PVR_HDD_SIZE],
@@ -1648,17 +1656,16 @@ class DeviceContextEvent(EventHeader):
 			properties[DISPLAY_BUILD_DATE],
 			properties[DISPLAY_OPTIMAL_RES],
 			properties[DISPLAY_HDR_SUPPORT],
-			properties[TUNER_BER],
-			properties[TUNER_CNR],
-			properties[TUNER_SIGNAL_LEVEL],
 			properties[NETWORK_TYPE],
 			properties[RCU_VERSION],
 			properties[RCU_KEYS_PRESSED],
+			RcuTypeType(properties[RCU_TYPE]),
+			properties[APP_REGION_ID],
+			properties[APP_POSTCODE],
+			properties[APP_DTT_REGION],
 			properties[UI_VERSION],
 			properties[EPG_VERSION],
 			properties[EPG_VERSION_INSTALL_DATE],
-			properties[LOCATION_FLAG_SET],
-			properties[APPLICATION_FLAG_SET]
 		)
 		obj._set_header_from_event(properties)
 		return obj

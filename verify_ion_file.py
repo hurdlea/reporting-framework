@@ -1,16 +1,10 @@
-#  Developed by Alan Hurdle on 13/6/19, 6:21 pm.
-#  Last modified 13/6/19, 6:18 pm
+#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
+#  Last modified 14/6/19, 1:49 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from reporting_events import *
-from amazon.ion import symbols as ion_symbols, simpleion, simple_types, core
-from datetime import timedelta, timezone
-import six
+from amazon.ion import symbols as ion_symbols, simpleion, simple_types
 import sys
-
-# from collections import OrderedDict
-# from dataclasses import dataclass
-# from typing import List, Union
 
 
 def decode_ion_event(event: EventFactory, data):
@@ -32,17 +26,36 @@ def decode_ion_data(data):
 	return header
 
 
-# Here we are reading back the 10n file and creating a JSON output in the same directory
+# Here we are reading the 10n file and then parsing the resulting data model
 def read_data(filename: str):
+	# Build the shared symbol table from the analytics symbols
+	# Don't know how much time this takes but I presume that this only needs to be done once
 	catalog = ion_symbols.SymbolTableCatalog()
 	symbols = ion_symbols.SymbolTable(ion_symbols.SHARED_TABLE_TYPE, table, "foxtel.engagement.format", 1)
 	catalog.register(symbols)
 
+	# Pull in the file and transition from ION format to the internal data-model
+	# from here we can either generate XML, JSON or send events to Segment.
+	# Rather than performing class inspection it maybe better to add handlers to
+	# the reporting event model.
 	with open(filename, "rb") as read_file:
 		data = simpleion.load(read_file, catalog, single_value=True)
 		event_model = decode_ion_data(data)
 
-	print(event_model)
+	events = event_model.events
+	for event in events:
+		if isinstance(event, ViewingStopEvent):
+			pass
+
+		if isinstance(event, RecordingEvent):
+			pass
+
+		if isinstance(event, BookContentActionEvent):
+			pass
+
+		if isinstance(event, DeviceContextEvent):
+			pass
+
 	return event_model
 
 

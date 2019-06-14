@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 12/6/19, 11:07 am.
-#  Last modified 12/6/19, 10:59 am
+#  Developed by Alan Hurdle on 14/6/19, 2:30 pm.
+#  Last modified 14/6/19, 1:16 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from log_manager import LogManager
@@ -47,7 +47,7 @@ def device_context(timestamp: datetime) -> DeviceContextEvent:
 		timestamp=timestamp,
 		hw_version='110114213330000000',
 		os_version='539032',
-		temperature=45,
+		model_id=0x8A,
 		num_resets=82,
 		uptime=2566526,
 		pvr_hdd_size=926,
@@ -60,17 +60,16 @@ def device_context(timestamp: datetime) -> DeviceContextEvent:
 		display_build_date='1:27',
 		display_optimal_res='117:218',
 		display_hdr_support='13',
-		tuner_ber=0,
-		tuner_cnr=408,
-		tuner_signal_level=62,
 		network_connectivity=1,
-		rcu_version='',
+		rcu_version='RC4163801/01BR:A4DA32CC13DD:1.6',
 		rcu_keys_pressed=bytes.fromhex('0000000000000000'),
+		rcu_type=RcuTypeType(4),
+		region_id=16401,
+		postcode=4012,
+		dtt_region=16384,
 		ui_design_version='PHOENIX3',
 		epg_version='274_A_538953:v10R0815',
 		epg_install_timestamp=datetime(2019, 5, 20, 0, 0, 0, 0),
-		location_flag_set=bytes.fromhex('0000000000000000000000000000000000000000000000000000000000000000'),
-		app_flags_set=bytes.fromhex('0000000000000000000000000fac4000')
 	)
 	return event
 
@@ -183,7 +182,6 @@ relevantSchedules.endTime,relevantSchedules.classification,relevantSchedules.id,
 
 
 def request_live_event(channel: str) -> ProgrammeMetadata:
-	proxy_host = 'localhost:3128'
 	host = "http://foxtel-staging-admin-0.digitalsmiths.net/sd/foxtel/"
 	tap = "taps/sources/linearonnow"
 	fields = "__fl=metadata.programEventTitle,metadata.episodeTitle,relevantSchedules.videoQuality,metadata.programId,\
