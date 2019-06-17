@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 14/6/19, 5:42 pm.
-#  Last modified 14/6/19, 5:23 pm
+#  Developed by Alan Hurdle on 17/6/19, 12:05 pm.
+#  Last modified 17/6/19, 11:48 am
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 DOC_VERSION = "document-version"
 TIMESTAMP = "timestamp"
@@ -126,6 +126,8 @@ CONF_SPDIF_AUDIO_MODE = "application-spdifAudioOutput"
 CONF_HDMI_AUDIO_MODE = "application-hdmiAudioOutput"
 CONF_DOWNLOAD_HD = "application-downloadHD"
 CONF_STREAM_FROM_STORE = "application-streamFromStore"
+CONF_CEC_POWER = "application-cecPower"
+CONF_CEC_VOLUME = "application-cecVolume"
 APP_NAME = "application-name"  # Application Launch Event
 APP_PROVIDER = "application-provider"
 APP_STATE = "application-state"
@@ -256,6 +258,8 @@ table = [
 	CONF_HDMI_AUDIO_MODE,
 	CONF_DOWNLOAD_HD,
 	CONF_STREAM_FROM_STORE,
+	CONF_CEC_POWER,
+	CONF_CEC_VOLUME,
 	APP_NAME,  # Application Launch Event
 	APP_PROVIDER,
 	APP_STATE,

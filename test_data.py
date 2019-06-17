@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 14/6/19, 5:42 pm.
-#  Last modified 14/6/19, 5:29 pm
+#  Developed by Alan Hurdle on 17/6/19, 12:05 pm.
+#  Last modified 17/6/19, 9:07 am
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from log_manager import LogManager
@@ -269,7 +269,7 @@ def make_pvr_stop_event(timestamp: datetime, viewing_start: datetime, event: Pro
 		program_episode_title=event.episode_title,
 		program_classification=event.classification,
 		program_resolution=event.resolution,
-		content_type=ContentTypeType(ContentTypeType.TUNER_SUB),
+		content_type=media.content_type,
 		view_status=ViewStatusType(ViewStatusType.CAPTIONS),
 		booking_source=media.booking_source,
 		event_source=media.event_source,
@@ -310,7 +310,7 @@ def power_states_activity(m: LogManager):
 	context.rcu_version = "** SCENARIO: POWER STATES **"
 	m.push_event(context)
 
-	power_on = PowerStatusEvent(timestamp, PowerStateType.POWER_ON)
+	power_on = PowerStatusEvent(timestamp, PowerStateType.POWER_ON, False)
 	m.push_event(power_on)
 
 	timestamp += timedelta(seconds=1)
@@ -335,14 +335,14 @@ def power_states_activity(m: LogManager):
 	standby = PageViewEvent(timestamp, 'standby')
 	m.push_event(standby)
 
-	power_standby = PowerStatusEvent(timestamp, PowerStateType.STANDBY)
+	power_standby = PowerStatusEvent(timestamp, PowerStateType.STANDBY, True)
 	m.push_event(power_standby)
 
 	display_off = VideoOutputEvent(timestamp, False)
 	m.push_event(display_off)
 
 	timestamp += timedelta(hours=8)
-	active = PowerStatusEvent(timestamp, PowerStateType.ACTIVE)
+	active = PowerStatusEvent(timestamp, PowerStateType.ACTIVE, True)
 	m.push_event(active)
 
 	timestamp += timedelta(seconds=1)

@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 14/6/19, 5:42 pm.
-#  Last modified 14/6/19, 5:27 pm
+#  Developed by Alan Hurdle on 17/6/19, 12:05 pm.
+#  Last modified 17/6/19, 12:03 pm
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from enum import Enum, IntFlag, IntEnum
@@ -132,12 +132,11 @@ class ViewStatusType(IntFlag):
 
 
 class RecordingStatusType(IntFlag):
-	WATCHED = 0x01
-	PARTIAL_REC = 0x02
-	SIGNAL_LOSS = 0x04
-	FAILED_REC = 0x08
-	CA_ERROR = 0x10
-	CLASH = 0x20
+	COMPLETE = 1
+	PARTIAL_REC = 2
+	SIGNAL_LOSS = 3
+	FAILED_REC = 4
+	FAILED_CLASH = 5
 
 
 class ContentTypeType(IntEnum):
@@ -411,6 +410,7 @@ class EndOfFileEvent(EventHeader):
 @dataclass()
 class PowerStatusEvent(EventHeader):
 	power_status: PowerStateType
+	user_initiated: bool
 
 	@staticmethod
 	def get_event_id():
@@ -422,12 +422,17 @@ class PowerStatusEvent(EventHeader):
 	def pack_event(self) -> OrderedDict:
 		properties = super().pack_event()
 		properties[DEVICE_POWER_STATUS] = self.power_status.value
+		properties[EVENT_USER_INITIATED] = self.user_initiated
 
 		return properties
 
 	@staticmethod
 	def unpack_event(properties):
-		obj = PowerStatusEvent(properties[TIMESTAMP], properties[DEVICE_POWER_STATUS])
+		obj = PowerStatusEvent(
+			properties[TIMESTAMP],
+			properties[DEVICE_POWER_STATUS],
+			properties[EVENT_USER_INITIATED]
+		)
 		obj._set_header_from_event(properties)
 		return obj
 
@@ -1127,6 +1132,7 @@ class WatchContentActionEvent(EventHeader):
 	program_title: str
 	content_type: ContentTypeType
 	page: str = None
+	program_episode_title: str = None
 
 	@staticmethod
 	def get_event_id():
@@ -1140,6 +1146,8 @@ class WatchContentActionEvent(EventHeader):
 		properties[PAGE_NAME] = None
 		properties[CONTENT_PROGRAM_ID] = self.program_id
 		properties[CONTENT_PROGRAM_TITLE] = self.program_title
+		if self.program_episode_title is not None:
+			properties[CONTENT_EPISODE_TITLE] = self.program_episode_title
 		properties[CONTENT_TYPE] = self.content_type.value
 
 		return properties
@@ -1152,6 +1160,7 @@ class WatchContentActionEvent(EventHeader):
 			properties[CONTENT_PROGRAM_TITLE],
 			ContentTypeType(properties[CONTENT_TYPE]),
 			page=properties[PAGE_NAME],
+			program_episode_title=conditional_fill(CONTENT_EPISODE_TITLE, properties)
 		)
 		obj._set_header_from_event(properties)
 		return obj
@@ -1169,6 +1178,7 @@ class DownloadContentActionEvent(EventHeader):
 	content_type: ContentTypeType
 	download_state: DownloadStateType
 	page: str = None
+	program_episode_title: str = None
 
 	@staticmethod
 	def get_event_id():
@@ -1185,6 +1195,8 @@ class DownloadContentActionEvent(EventHeader):
 		properties[CONTENT_PROGRAM_ID] = self.program_id
 		properties[CONTENT_SCHEDULE_ID] = self.program_event_id
 		properties[CONTENT_PROGRAM_TITLE] = self.program_title
+		if self.program_episode_title is not None:
+			properties[CONTENT_EPISODE_TITLE] = self.program_episode_title
 		properties[CONTENT_CLASSIFICATION] = self.program_classification
 		properties[CONTENT_RESOLUTION] = self.program_resolution
 		properties[CONTENT_TYPE] = self.content_type.value
@@ -1205,7 +1217,8 @@ class DownloadContentActionEvent(EventHeader):
 			properties[CONTENT_RESOLUTION],
 			ContentTypeType(properties[CONTENT_TYPE]),
 			DownloadStateType(properties[MEDIA_DOWNLOAD_STATE]),
-			page=properties[PAGE_NAME]
+			page=properties[PAGE_NAME],
+			program_episode_title=conditional_fill(CONTENT_EPISODE_TITLE, properties)
 		)
 		obj._set_header_from_event(properties)
 		return obj
@@ -1367,6 +1380,7 @@ class UpgradeContentActionEvent(EventHeader):
 	content_type: ContentTypeType
 
 	page: str = None
+	program_episode_title: str = None
 
 	@staticmethod
 	def get_event_id():
@@ -1383,6 +1397,8 @@ class UpgradeContentActionEvent(EventHeader):
 		properties[CONTENT_SCHEDULE_ID] = self.program_event_id
 		properties[CONTENT_START_TIMESTAMP] = self.program_start_timestamp
 		properties[CONTENT_PROGRAM_TITLE] = self.program_title
+		if self.program_episode_title is not None:
+			properties[CONTENT_EPISODE_TITLE] = self.program_episode_title
 		properties[CONTENT_RESOLUTION] = self.program_resolution
 		properties[CONTENT_TYPE] = self.content_type.value
 
@@ -1400,6 +1416,7 @@ class UpgradeContentActionEvent(EventHeader):
 			properties[CONTENT_RESOLUTION],
 			ContentTypeType(properties[CONTENT_TYPE]),
 			page=properties[PAGE_NAME],
+			program_episode_title=conditional_fill(CONTENT_EPISODE_TITLE, properties)
 		)
 		obj._set_header_from_event(properties)
 		return obj
@@ -1407,13 +1424,17 @@ class UpgradeContentActionEvent(EventHeader):
 
 @dataclass()
 class RentContentActionEvent(EventHeader):
+	content_provider: str
 	program_id: str
+	program_event_id: str
 	program_title: str
+	program_classification: str
 	program_resolution: str
 	program_price: int
 	content_type: ContentTypeType
 
 	page: str = None
+	program_episode_title: str = None
 
 	@staticmethod
 	def get_event_id():
@@ -1425,8 +1446,13 @@ class RentContentActionEvent(EventHeader):
 	def pack_event(self) -> OrderedDict:
 		properties = super().pack_event()
 		properties[PAGE_NAME] = None
+		properties[CONTENT_PROVIDER] = self.content_provider
 		properties[CONTENT_PROGRAM_ID] = self.program_id
+		properties[CONTENT_SCHEDULE_ID] = self.program_event_id
 		properties[CONTENT_PROGRAM_TITLE] = self.program_title
+		if self.program_episode_title is not None:
+			properties[CONTENT_EPISODE_TITLE] = self.program_episode_title
+		properties[CONTENT_CLASSIFICATION] = self.program_classification
 		properties[CONTENT_RESOLUTION] = self.program_resolution
 		properties[CONTENT_TYPE] = self.content_type.value
 		properties[CONTENT_PRICE] = self.program_price
@@ -1437,12 +1463,16 @@ class RentContentActionEvent(EventHeader):
 	def unpack_event(properties):
 		obj = RentContentActionEvent(
 			properties[TIMESTAMP],
+			properties[CONTENT_PROVIDER],
 			properties[CONTENT_PROGRAM_ID],
+			properties[CONTENT_SCHEDULE_ID],
 			properties[CONTENT_PROGRAM_TITLE],
+			properties[CONTENT_CLASSIFICATION],
 			properties[CONTENT_RESOLUTION],
 			ContentTypeType(properties[CONTENT_TYPE]),
 			properties[CONTENT_PRICE],
 			page=properties[PAGE_NAME],
+			program_episode_title=conditional_fill(CONTENT_EPISODE_TITLE, properties)
 		)
 		obj._set_header_from_event(properties)
 		return obj
@@ -1694,6 +1724,8 @@ class ApplicationConfigEvent(EventHeader):
 	hdmi_audio_mode: str
 	download_hd: bool
 	stream_from_store: bool
+	cec_power: bool
+	cec_volume: bool
 
 	@staticmethod
 	def get_event_id():
@@ -1722,6 +1754,8 @@ class ApplicationConfigEvent(EventHeader):
 		properties[CONF_HDMI_AUDIO_MODE] = self.hdmi_audio_mode
 		properties[CONF_DOWNLOAD_HD] = self.download_hd
 		properties[CONF_STREAM_FROM_STORE] = self.stream_from_store
+		properties[CONF_CEC_POWER] = self.cec_power
+		properties[CONF_CEC_VOLUME] = self.cec_volume
 
 		return properties
 
@@ -1746,7 +1780,9 @@ class ApplicationConfigEvent(EventHeader):
 			properties[CONF_SPDIF_AUDIO_MODE],
 			properties[CONF_HDMI_AUDIO_MODE],
 			properties[CONF_DOWNLOAD_HD],
-			properties[CONF_STREAM_FROM_STORE]
+			properties[CONF_STREAM_FROM_STORE],
+			properties[CONF_CEC_POWER],
+			properties[CONF_CEC_VOLUME]
 		)
 		obj._set_header_from_event(properties)
 		return obj
