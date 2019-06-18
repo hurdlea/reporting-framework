@@ -1,5 +1,5 @@
-#  Developed by Alan Hurdle on 17/6/19, 12:05 pm.
-#  Last modified 17/6/19, 12:03 pm
+#  Developed by Alan Hurdle on 18/6/19, 1:37 pm.
+#  Last modified 18/6/19, 8:42 am
 #  Copyright (c) 2019 Foxtel Management Pty Limited. All rights reserved
 
 from enum import Enum, IntFlag, IntEnum
@@ -213,7 +213,7 @@ class IdentityHeader:
 		header[DOC_VERSION] = self.document_version
 		header[TIMESTAMP] = self.timestamp
 		header[SEQUENCE_ID] = self.sequence
-		header[LIBRARY_NAME] = self.library_version
+		header[LIBRARY_NAME] = self.library_name
 		header[LIBRARY_VERSION] = self.library_version
 		header[DEVICE_TYPE] = self.device_type
 		header[DEVICE_NAME] = self.device_name
